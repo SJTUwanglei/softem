@@ -58,11 +58,50 @@ class FullMatrixSoftEM(BaseMatrixSoftEM):
                                              np.einsum('nkij,kjl->nkil', cov_inv, Sigma_k))
 
         # 提取对角元素： (N, K, D)
-        sigma_post_diag = np.einsum('nkdd->nkd', full_covs)
+        # sigma_post_diag = np.einsum('nkdd->nkd', full_covs)
+        sigma_post_diag = np.diagonal(full_covs, axis1=2, axis2=3)  # (N, K, D)  仅仅这一步用np.diagonal代替einsum速度更快
 
         return mu_post, sigma_post_diag, full_covs
 
     def _logpdf(self, Y: np.ndarray, means: np.ndarray, covariances: np.ndarray) -> np.ndarray:
+        """
+        使用完整协方差矩阵计算 logpdf（完全向量化）
+
+        参数：
+            Y: (N, D)
+            means: (N, K, D)
+            covariances: (N, K, D, D)
+
+        返回：
+            logpdf: (N, K)
+        """
+        N, K, D = means.shape
+
+        # 差值 (N, K, D)
+        diff = Y[:, None, :] - means
+
+        # Cholesky 分解 (N, K, D, D)
+        chol = stable_cholesky(covariances)
+
+        # 解线性系统：solve L x = diff.T
+        # 转换为 (N*K, D, D) 和 (N*K, D, 1)，支持3维batch但不支持4维
+        chol_reshaped = chol.reshape(-1, D, D)
+        diff_reshaped = diff.reshape(-1, D, 1)
+        solve = np.linalg.solve(chol_reshaped, diff_reshaped).reshape(N, K, D, 1)
+
+        # Mahalanobis 距离 (N, K)
+        quad = np.sum(solve.squeeze(-1) ** 2, axis=-1)
+
+        # 对数行列式 (N, K)
+        log_diag = np.log(np.diagonal(chol, axis1=2, axis2=3))  # (N, K, D)
+        log_det = 2 * np.sum(log_diag, axis=-1)  # (N, K)
+
+        # 最终 logpdf
+        logpdf = -0.5 * (quad + log_det + D * np.log(2 * np.pi))  # (N, K)
+        return logpdf
+
+
+    def _iterK_logpdf(self, Y: np.ndarray, means: np.ndarray, covariances: np.ndarray) -> np.ndarray:
         """
         使用完整协方差矩阵计算 logpdf
 

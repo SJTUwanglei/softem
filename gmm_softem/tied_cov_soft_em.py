@@ -61,6 +61,44 @@ class TiedMatrixSoftEM(BaseMatrixSoftEM):
 
     def _logpdf(self, Y: np.ndarray, means: np.ndarray, covariances: np.ndarray) -> np.ndarray:
         """
+        使用共享协方差矩阵计算 logpdf（向量化）
+
+        参数：
+            Y: (N, D)
+            means: (N, K, D)
+            covariances: (N, D, D)
+
+        返回：
+            logpdf: (N, K)
+        """
+        N, K, D = means.shape
+
+        # Cholesky 分解：每个样本一个协方差矩阵
+        chol = stable_cholesky(covariances)  # (N, D, D)
+        log_det = 2 * np.sum(np.log(np.diagonal(chol, axis1=1, axis2=2)), axis=1)  # (N,)
+
+        # 差值：Y - means[:, k, :] → (N, K, D)
+        diff = Y[:, None, :] - means  # (N, K, D)
+
+        # 扩展 chol 以匹配组件维度： (N, 1, D, D) → broadcast to (N, K, D, D)
+        chol_exp = chol[:, None, :, :]  # (N, 1, D, D)
+
+        # reshape 为 (N*K, D, D) 和 (N*K, D, 1)
+        chol_flat = chol_exp.reshape(-1, D, D)
+        diff_flat = diff.reshape(-1, D, 1)
+
+        # 解线性系统：solve L x = diff.T
+        solve = np.linalg.solve(chol_flat, diff_flat).reshape(N, K, D)
+
+        # Mahalanobis 距离：||solve||²
+        quad = np.einsum('nkd,nkd->nk', solve, solve)  # (N, K)
+
+        # 广播 log_det 到组件维度
+        logpdf = -0.5 * (quad + log_det[:, None] + D * np.log(2 * np.pi))  # (N, K)
+        return logpdf
+
+    def _iterK_logpdf(self, Y: np.ndarray, means: np.ndarray, covariances: np.ndarray) -> np.ndarray:
+        """
         使用共享协方差矩阵计算 logpdf
 
         参数：
