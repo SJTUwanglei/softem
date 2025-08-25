@@ -30,17 +30,37 @@ git clone https://github.com/SJTUwanglei/softem.git
 cd softem
 ```
 
+---
+
 ## 🛠️ demo
 examples/factory_deno.py 中设置了四种类型的工厂模式下的调用demo的一些展示。
 由于代码还未优化完全，尤其是速度性能方面，因此暂时未进行 pip对应的包的封装
 
-## TODO
-- 存在严重的BUG，invalid value: 计算协方差矩阵的sigma 等中间数值时为负数。
-  - 是因为tied本身假设不友好导致模型参数后续计算不稳定。
-  - 即使对角 eps 软正则，目前一些 clip 的措施仍旧不产生效果
-  - 只能在计算出的 sigma_post_diag 进行safe_clip截断
+---
+
+## 🚧 TODO & Roadmap
+
+### 🛠️ 待改进
 - 推理代码的numpy和numba的串行优化，或C++的局部封装
 - 代码冗余清理
+  - 目前为了理解维度保持较多注释
+  - utils.py 保留了一些之前版本的功能函数
 - 文档docs
+
+### ✨ 计划新增功能
+- 算法：增加 full 类型下Low Rank GMM
+- 业务：新开辟在线推理识别的业务模块
+  - 若功能复杂可能在新仓库
+  - 包含业务部署
+- 算法pip封装
+
+### 🐞 已知问题
+- 存在某个事实不合理的BUG但暂时很难避免，invalid value: 计算协方差矩阵的sigma 等中间数值时为负数。
+  - 是因为tied、full等类型本身假设情况下，硬截断导致模型参数后续计算不稳定。
+  - 即使使用对角 eps 软正则代替硬截断，目前部分仍旧 invalid value
+  - 暂时解决方案只能在计算出的 sigma_post_diag 进行safe_clip截断
+
+
+
 
 
